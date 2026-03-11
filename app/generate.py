@@ -22,7 +22,10 @@ import sys
 import time
 
 # Memory optimization for unified memory architecture
-os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+os.environ.setdefault(
+    "PYTORCH_CUDA_ALLOC_CONF",
+    "expandable_segments:True,max_split_size_mb:512",
+)
 
 # Ensure CUDA is on PATH
 if "/usr/local/cuda-13.0/bin" not in os.environ.get("PATH", ""):
@@ -101,6 +104,12 @@ def main():
     from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
     from ltx_pipelines.distilled import DistilledPipeline
     from ltx_pipelines.utils.args import ImageConditioningInput
+
+    # Blackwell (GB10) optimization: enable cuDNN auto-tuning and TF32 math
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+    torch.set_float32_matmul_precision("high")
     from ltx_pipelines.utils.media_io import encode_video
 
     # Parse image conditioning args
@@ -172,5 +181,9 @@ def main():
 
 if __name__ == "__main__":
     import torch
-    with torch.inference_mode():
+    # NOTE: Use torch.no_grad() instead of torch.inference_mode().
+    # The pipeline returns a lazy video iterator — VAE decode runs inside
+    # encode_video().  inference_mode() creates special tensors that break
+    # when the VAE's conv3d layers try to save them for backward.
+    with torch.no_grad():
         main()

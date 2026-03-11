@@ -89,24 +89,50 @@
         <div>
           <label class="block text-xs font-medium text-gray-400 mb-1.5">Resolution</label>
           <select id="resolution"
-            class="w-full bg-surface-50 border border-surface-300 rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-indigo-500">
+            class="w-full bg-surface-50 border border-surface-300 rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-indigo-500"
+            onchange="onResolutionChange()">
             <option value="512x768">512 × 768 (Fast)</option>
-            <option value="768x1280">768 × 1280 (Medium)</option>
-            <option value="1024x1536" selected>1024 × 1536 (Default)</option>
+            <option value="704x1280">704 × 1280 (720p)</option>
+            <option value="1024x1536" selected>1024 × 1536 (HD)</option>
+            <option value="1088x1920">1088 × 1920 (1080p)</option>
+            <option value="1408x2560">1408 × 2560 (2K)</option>
+            <option value="2176x3840">2176 × 3840 (Near-4K)</option>
+            <option value="custom">Custom...</option>
           </select>
+          <div id="custom-resolution" class="hidden mt-2 grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] text-gray-500 mb-0.5">Height</label>
+              <input id="custom-height" type="number" min="256" max="4096" step="64" value="1024"
+                class="w-full bg-surface-50 border border-surface-300 rounded-lg px-2 py-1.5 text-sm text-gray-200 outline-none focus:border-indigo-500"
+                onchange="updateEstimate()">
+            </div>
+            <div>
+              <label class="block text-[10px] text-gray-500 mb-0.5">Width</label>
+              <input id="custom-width" type="number" min="256" max="4096" step="64" value="1536"
+                class="w-full bg-surface-50 border border-surface-300 rounded-lg px-2 py-1.5 text-sm text-gray-200 outline-none focus:border-indigo-500"
+                onchange="updateEstimate()">
+            </div>
+            <p class="col-span-2 text-[10px] text-gray-600">Both values must be divisible by 64</p>
+          </div>
         </div>
 
         <!-- Frames -->
         <div>
           <label class="block text-xs font-medium text-gray-400 mb-1.5">Frames / Duration</label>
           <select id="frames"
-            class="w-full bg-surface-50 border border-surface-300 rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-indigo-500">
-            <option value="25">25 frames (1.0s)</option>
-            <option value="49">49 frames (2.0s)</option>
-            <option value="73">73 frames (3.0s)</option>
-            <option value="97">97 frames (4.0s)</option>
-            <option value="121" selected>121 frames (5.0s)</option>
+            class="w-full bg-surface-50 border border-surface-300 rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-indigo-500"
+            onchange="onFramesChange()">
+            <option value="25">25 frames (~1s)</option>
+            <option value="49">49 frames (~2s)</option>
+            <option value="73">73 frames (~3s)</option>
+            <option value="97">97 frames (~4s)</option>
+            <option value="121" selected>121 frames (~5s)</option>
+            <option value="193">193 frames (~8s)</option>
+            <option value="241">241 frames (~10s)</option>
+            <option value="361">361 frames (~15s)</option>
+            <option value="481">481 frames (~20s)</option>
           </select>
+          <p id="duration-warning" class="hidden text-[10px] text-yellow-500 mt-1">15-20s videos require FP8 on and 1080p or lower resolution.</p>
         </div>
 
         <!-- FPS + Seed row -->
@@ -129,12 +155,31 @@
           </div>
         </div>
 
+        <!-- Quality Mode -->
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1.5">Quality Mode</label>
+          <div class="flex bg-surface-50 rounded-lg p-1">
+            <button onclick="setQuality('fast')" id="q-fast"
+              class="flex-1 py-1.5 text-xs font-medium rounded-md transition-colors text-gray-400 hover:text-white">
+              Fast
+            </button>
+            <button onclick="setQuality('default')" id="q-default"
+              class="flex-1 py-1.5 text-xs font-medium rounded-md transition-colors bg-surface-200 text-white">
+              Default
+            </button>
+            <button onclick="setQuality('max')" id="q-max"
+              class="flex-1 py-1.5 text-xs font-medium rounded-md transition-colors text-gray-400 hover:text-white">
+              Max Quality
+            </button>
+          </div>
+        </div>
+
         <!-- Toggles -->
         <div class="space-y-3">
           <label class="flex items-center justify-between cursor-pointer">
             <span class="text-sm text-gray-300">FP8 Quantization</span>
             <div class="relative">
-              <input id="fp8-toggle" type="checkbox" class="sr-only peer">
+              <input id="fp8-toggle" type="checkbox" class="sr-only peer" checked>
               <div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-indigo-600 transition-colors"></div>
               <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
             </div>
@@ -142,11 +187,33 @@
           <label class="flex items-center justify-between cursor-pointer">
             <span class="text-sm text-gray-300">Enhance Prompt</span>
             <div class="relative">
-              <input id="enhance-toggle" type="checkbox" class="sr-only peer">
+              <input id="enhance-toggle" type="checkbox" class="sr-only peer" checked>
               <div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-indigo-600 transition-colors"></div>
               <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
             </div>
           </label>
+        </div>
+
+        <!-- Advanced Settings (Collapsible) -->
+        <div>
+          <button onclick="toggleAdvanced()" class="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors">
+            <svg id="advanced-chevron" class="w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            Advanced Settings
+          </button>
+          <div id="advanced-panel" class="hidden mt-2 space-y-3 p-3 bg-surface-50 rounded-lg border border-surface-300">
+            <div>
+              <label class="block text-[10px] text-gray-500 mb-0.5">Spatial Tile Size (px)</label>
+              <input id="adv-spatial-tile" type="range" min="256" max="1024" step="32" value="0"
+                class="w-full accent-indigo-500" oninput="document.getElementById('adv-spatial-tile-val').textContent=this.value=='0'?'Auto':this.value+'px'">
+              <span id="adv-spatial-tile-val" class="text-[10px] text-gray-500">Auto</span>
+            </div>
+            <div>
+              <label class="block text-[10px] text-gray-500 mb-0.5">Temporal Tile Size (frames)</label>
+              <input id="adv-temporal-tile" type="range" min="16" max="128" step="8" value="0"
+                class="w-full accent-indigo-500" oninput="document.getElementById('adv-temporal-tile-val').textContent=this.value=='0'?'Auto':this.value+' frames'">
+              <span id="adv-temporal-tile-val" class="text-[10px] text-gray-500">Auto</span>
+            </div>
+          </div>
         </div>
 
         <!-- Generate Button -->
@@ -156,6 +223,13 @@
           <span id="gen-text">Generate Video</span>
           <div id="gen-spinner" class="hidden spinner w-5 h-5"></div>
         </button>
+
+        <!-- Estimation Display -->
+        <div id="estimate-info" class="text-xs text-center space-y-0.5">
+          <p id="est-time" class="text-gray-500"></p>
+          <p id="est-vram" class="text-gray-500"></p>
+          <p id="est-warning" class="text-yellow-500 hidden"></p>
+        </div>
 
       </div>
     </aside>
@@ -228,6 +302,113 @@
     let uploadedImagePath = null;
     let isGenerating = false;
     let eventSource = null;
+    let currentQuality = 'default';
+
+    // ── Quality Mode ──
+    function setQuality(mode) {
+      currentQuality = mode;
+      ['fast', 'default', 'max'].forEach(m => {
+        const btn = document.getElementById(`q-${m}`);
+        if (m === mode) {
+          btn.className = 'flex-1 py-1.5 text-xs font-medium rounded-md transition-colors bg-surface-200 text-white';
+        } else {
+          btn.className = 'flex-1 py-1.5 text-xs font-medium rounded-md transition-colors text-gray-400 hover:text-white';
+        }
+      });
+      if (mode === 'fast') {
+        document.getElementById('fp8-toggle').checked = true;
+        document.getElementById('enhance-toggle').checked = false;
+      } else if (mode === 'default') {
+        document.getElementById('fp8-toggle').checked = true;
+        document.getElementById('enhance-toggle').checked = true;
+      } else if (mode === 'max') {
+        document.getElementById('fp8-toggle').checked = false;
+        document.getElementById('enhance-toggle').checked = true;
+      }
+      updateEstimate();
+    }
+
+    // ── Resolution Change ──
+    function onResolutionChange() {
+      const val = document.getElementById('resolution').value;
+      document.getElementById('custom-resolution').classList.toggle('hidden', val !== 'custom');
+      checkDurationConstraints();
+      updateEstimate();
+    }
+
+    // ── Frames Change ──
+    function onFramesChange() {
+      checkDurationConstraints();
+      updateEstimate();
+    }
+
+    // ── Duration / Resolution Constraints ──
+    function checkDurationConstraints() {
+      const frames = parseInt(document.getElementById('frames').value);
+      const fpsEl = document.getElementById('fps');
+      const warnEl = document.getElementById('duration-warning');
+
+      // >10s → lock FPS to 25, warn about resolution
+      if (frames > 241) {
+        fpsEl.value = 25;
+        warnEl.classList.remove('hidden');
+      } else {
+        warnEl.classList.add('hidden');
+      }
+    }
+
+    // ── Advanced Panel Toggle ──
+    function toggleAdvanced() {
+      const panel = document.getElementById('advanced-panel');
+      const chevron = document.getElementById('advanced-chevron');
+      panel.classList.toggle('hidden');
+      chevron.style.transform = panel.classList.contains('hidden') ? '' : 'rotate(90deg)';
+    }
+
+    // ── Estimation ──
+    let estimateTimer = null;
+    function updateEstimate() {
+      clearTimeout(estimateTimer);
+      estimateTimer = setTimeout(async () => {
+        const { h, w } = getResolution();
+        const numFrames = parseInt(document.getElementById('frames').value);
+        const fp8 = document.getElementById('fp8-toggle').checked;
+        try {
+          const res = await fetch('/api/estimate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              height: h, width: w, num_frames: numFrames,
+              quantization: fp8 ? 'fp8-cast' : null
+            })
+          });
+          const d = await res.json();
+          document.getElementById('est-time').textContent =
+            `Est. time: ~${formatTime(d.estimated_total_time_s)}`;
+          document.getElementById('est-vram').textContent =
+            `Est. VRAM: ~${d.estimated_vram_gb}GB / ${d.available_vram_gb}GB`;
+          const warnEl = document.getElementById('est-warning');
+          if (d.warning) {
+            warnEl.textContent = d.warning;
+            warnEl.classList.remove('hidden');
+          } else {
+            warnEl.classList.add('hidden');
+          }
+        } catch (err) {}
+      }, 300);
+    }
+
+    function getResolution() {
+      const resVal = document.getElementById('resolution').value;
+      if (resVal === 'custom') {
+        return {
+          h: parseInt(document.getElementById('custom-height').value) || 1024,
+          w: parseInt(document.getElementById('custom-width').value) || 1536
+        };
+      }
+      const [h, w] = resVal.split('x').map(Number);
+      return { h, w };
+    }
 
     // ── Mode Switching ──
     function setMode(mode) {
@@ -303,7 +484,12 @@
       const prompt = document.getElementById('prompt').value.trim();
       if (!prompt) { alert('Please enter a prompt'); return; }
 
-      const [h, w] = document.getElementById('resolution').value.split('x').map(Number);
+      const { h, w } = getResolution();
+      if (h % 64 !== 0 || w % 64 !== 0) {
+        alert('Height and Width must both be divisible by 64');
+        return;
+      }
+
       const numFrames = parseInt(document.getElementById('frames').value);
       const fps = parseFloat(document.getElementById('fps').value);
       const seed = parseInt(document.getElementById('seed').value);
@@ -315,6 +501,7 @@
         images.push({ path: uploadedImagePath, frame_idx: 0, strength: 1.0, crf: 23 });
       }
 
+      // Build body with optional advanced tiling params
       const body = {
         prompt, height: h, width: w,
         num_frames: numFrames, frame_rate: fps, seed,
@@ -322,6 +509,12 @@
         enhance_prompt: enhance,
         images,
       };
+
+      // Add advanced tiling overrides if user changed them
+      const spatialTile = parseInt(document.getElementById('adv-spatial-tile').value);
+      const temporalTile = parseInt(document.getElementById('adv-temporal-tile').value);
+      if (spatialTile > 0) body.tiling_spatial_tile = spatialTile;
+      if (temporalTile > 0) body.tiling_temporal_tile = temporalTile;
 
       try {
         const res = await fetch('/api/generate', {
@@ -564,6 +757,9 @@
     loadGallery();
     pollPipelineStatus();
     setInterval(pollPipelineStatus, 5000);
+    // Trigger initial estimate and attach FP8 toggle listener
+    document.getElementById('fp8-toggle').addEventListener('change', updateEstimate);
+    updateEstimate();
   </script>
 </body>
 </html>

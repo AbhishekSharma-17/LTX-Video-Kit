@@ -49,8 +49,8 @@ LTX-2.3 is a **Diffusion Transformer (DiT)** model that generates videos with sy
 | Released | March 2026 by Lightricks |
 | Input | Text prompt (and/or image) |
 | Output | MP4 video with audio |
-| Max resolution | 1024 × 1536 |
-| Max duration | 5 seconds (121 frames @ 24fps) |
+| Max resolution | Up to 2176 × 3840 (Near-4K) |
+| Max duration | Up to 20 seconds (481 frames) |
 | Inference steps | 8 (Stage 1) + 3 (Stage 2) = 11 total |
 | Model format | SafeTensors (bf16) |
 | Text encoder | Gemma-3 12B (quantized to 4-bit) |
@@ -67,12 +67,18 @@ The **distilled** variant used here generates video in just **11 denoising steps
 ### Web UI (Video Studio)
 - **Text-to-Video**: Type a prompt, get a video
 - **Image-to-Video**: Upload an image, animate it with a prompt
-- **Resolution presets**: 512x768 (fast), 768x1280 (medium), 1024x1536 (full quality)
-- **Frame presets**: 25 (1s), 49 (2s), 73 (3s), 97 (4s), 121 (5s)
+- **6 Resolution presets**: 512x768 (fast), 704x1280 (720p), 1024x1536 (HD), 1088x1920 (1080p), 1408x2560 (2K), 2176x3840 (Near-4K) + custom resolution input
+- **9 Duration presets**: 1s, 2s, 3s, 4s, 5s, 8s, 10s, 15s, 20s
+- **Quality modes**: Fast / Default / Max Quality (one-click presets)
 - **Real-time progress**: Per-step progress bar with ETA, elapsed time, step timing
+- **Time & VRAM estimation**: See estimated generation time and memory usage before clicking Generate
 - **Gallery**: Browse, replay, and delete past generations
-- **FP8 quantization toggle**: Use less memory at the cost of slight quality reduction
+- **FP8 quantization** (default ON): 40% less memory with minimal quality loss
 - **Prompt enhancement**: Let Gemma improve your prompt before generation
+- **Smart adaptive tiling**: Automatically adjusts spatial/temporal tile sizes for optimal quality at any resolution
+- **Advanced settings**: Collapsible panel to override tiling parameters for power users
+- **Model pre-loading**: Pipeline loads automatically at server startup (no cold-start penalty)
+- **torch.compile()**: Transformer model is JIT-compiled for 20-40% faster inference
 - **Pipeline status**: See GPU memory usage and model loading state in the header
 - **Metrics dashboard**: Generation time, load time, resolution, seed, file size
 
@@ -83,25 +89,31 @@ The **distilled** variant used here generates video in just **11 denoising steps
 ### Architecture
 ```
   Browser (Tailwind CSS dark UI)
+     |  - Quality modes (Fast / Default / Max Quality)
+     |  - VRAM + time estimation before generation
      |
      v
   Flask (app.py) --- SSE (Server-Sent Events) --> Browser updates
+     |  - /api/estimate — pre-generation cost estimation
+     |  - /api/generate — submit job with tiling overrides
      |
      v
   PipelineManager (pipeline_worker.py)
-     |  - Singleton pipeline (loaded once, reused)
+     |  - Singleton pipeline (pre-loaded at startup, reused)
      |  - Background worker thread + job queue
+     |  - Smart adaptive tiling based on resolution/duration
+     |  - torch.compile() on transformer for 20-40% speedup
      |  - Monkey-patched denoising loop for progress
      |
      v
   DistilledPipeline (ltx-pipelines)
-     |  - Stage 1: 8-step denoising at half res
-     |  - Spatial upsampling 2x
-     |  - Stage 2: 3-step refinement at full res
-     |  - Video VAE decode + Audio VAE decode
+     |  - Stage 1: 8-step denoising at half res (up to 1088x1920)
+     |  - Spatial upsampling 2x (LatentUpsampler)
+     |  - Stage 2: 3-step refinement at full res (up to 2176x3840)
+     |  - Video VAE decode + Audio VAE decode (tiled)
      |
      v
-  MP4 output (H.264 video + AAC audio)
+  MP4 output (H.264 video + AAC audio, up to 4K/20s)
 ```
 
 ---
@@ -151,7 +163,8 @@ python generate.py --prompt "The scene comes alive" \
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/` | Web UI page |
-| `POST` | `/api/generate` | Submit a generation job. Body: `{prompt, height, width, num_frames, ...}`. Returns `{job_id}` |
+| `POST` | `/api/generate` | Submit a generation job. Body: `{prompt, height, width, num_frames, frame_rate, seed, quantization, enhance_prompt, images, tiling_spatial_tile, tiling_temporal_tile}`. Returns `{job_id}` |
+| `POST` | `/api/estimate` | Estimate VRAM and generation time. Body: `{height, width, num_frames, quantization}`. Returns `{estimated_vram_gb, estimated_gen_time_s, feasible, warning}` |
 | `GET` | `/api/status/<job_id>` | SSE stream. Events: `stage`, `progress`, `complete`, `error` |
 | `GET` | `/api/gallery` | List of past generations (JSON array) |
 | `DELETE` | `/api/gallery/<job_id>` | Delete a generation and its video file |
@@ -234,7 +247,20 @@ The system intercepts the denoising loop (the heart of the AI) by replacing it w
 
 ### Why is the first generation slow?
 
-The first time you generate, the system loads 67GB of model weights into GPU memory. This takes 30-60 seconds. After that, the models stay loaded and subsequent generations are much faster (10-120 seconds depending on resolution and frame count).
+The system **pre-loads** models automatically at server startup. If the models are already loaded, your first generation starts immediately. If you change quantization settings (e.g., switch FP8 on/off), the pipeline will reload which takes 30-60 seconds. After that, the models stay loaded and subsequent generations are much faster (10-120 seconds depending on resolution and frame count).
+
+### Resolution & duration guidelines
+
+| Resolution | Max Duration | Notes |
+|------------|-------------|-------|
+| 512×768 (Fast) | 20s | Fastest option, good for testing |
+| 704×1280 (720p) | 20s | Good balance of speed and quality |
+| 1024×1536 (HD) | 20s | Default quality |
+| 1088×1920 (1080p) | 20s | Full HD, recommended maximum for long videos |
+| 1408×2560 (2K) | 10s | High detail, shorter clips recommended |
+| 2176×3840 (Near-4K) | 10s | Maximum quality, requires FP8, short clips |
+
+> **Tip**: Videos longer than 10 seconds are only supported at 1080p (1088×1920) or lower resolution.
 
 ---
 

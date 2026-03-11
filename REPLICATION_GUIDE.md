@@ -378,18 +378,23 @@ Open your browser and go to:
 ### Using the Web UI
 
 1. **Type a prompt** in the text box on the left
-2. **Choose resolution** — start with "512 × 768 (Fast)" for quick tests
-3. **Choose frames** — "25 frames (1.0s)" is fastest
-4. **Click "Generate Video"**
-5. Watch the **progress bar** fill up with step-by-step updates
-6. When done, the video plays automatically
-7. Past videos appear in the **Gallery** at the bottom
+2. **Choose resolution** — start with "512 × 768 (Fast)" for quick tests. 6 presets available up to Near-4K (2176×3840), plus a "Custom" option for arbitrary resolutions
+3. **Choose frames** — "25 frames (~1s)" is fastest. Up to 481 frames (~20s) supported
+4. **Check the estimation** — below the Generate button, see estimated time and VRAM usage
+5. **Click "Generate Video"**
+6. Watch the **progress bar** fill up with step-by-step updates
+7. When done, the video plays automatically
+8. Past videos appear in the **Gallery** at the bottom
 
 ### Tips
-- The **first generation** is slow because models need to load (~30-60s). After that, it's much faster.
-- Use **FP8 Quantization** toggle if you're running low on GPU memory
+- **Models pre-load automatically** at server startup. The first generation should start immediately.
+- **FP8 Quantization** is ON by default — saves ~40% memory with minimal quality loss
+- **Quality modes**: Use "Fast" for quick previews, "Default" for balanced, "Max Quality" for best results
 - The **"Enhance Prompt"** toggle uses Gemma to add cinematic details to your prompt
 - For **image-to-video**, click the "Image → Video" tab, upload an image, and add a prompt
+- **4K generation**: Use "2176 × 3840 (Near-4K)" resolution with FP8 on and short durations (1-3s)
+- **Long videos** (>10s): Must use 1080p (1088×1920) or lower resolution
+- **Advanced settings**: Click "Advanced Settings" to fine-tune spatial/temporal tile sizes
 
 ---
 

@@ -10,6 +10,7 @@ Routes:
   DELETE /api/gallery/<job_id>  Delete entry + video file
   POST /api/upload              Upload image for image-to-video
   GET  /api/pipeline/status     Pipeline state + GPU info
+  POST /api/estimate            Estimate VRAM + generation time
   GET  /outputs/<filename>      Serve generated videos
 """
 
@@ -72,6 +73,10 @@ def api_generate():
     enhance_prompt = bool(data.get("enhance_prompt", False))
     images = data.get("images", [])
 
+    # Optional tiling overrides from advanced settings
+    tiling_spatial_tile = int(data.get("tiling_spatial_tile", 0))
+    tiling_temporal_tile = int(data.get("tiling_temporal_tile", 0))
+
     # Validation
     if height % 64 != 0:
         return jsonify({"error": f"Height must be divisible by 64, got {height}"}), 400
@@ -80,6 +85,16 @@ def api_generate():
     if (num_frames - 1) % 8 != 0:
         return jsonify({
             "error": f"num_frames must be 8n+1 (e.g. 9,17,25,33,…,121), got {num_frames}"
+        }), 400
+
+    # Long video constraint: >10s only at ≤1080p
+    duration_s = num_frames / frame_rate
+    if duration_s > 10.5 and (height > 1088 or width > 1920):
+        return jsonify({
+            "error": (
+                f"Videos longer than 10s ({duration_s:.1f}s) are only supported at "
+                f"1080p (1088×1920) or lower. Please reduce resolution or duration."
+            )
         }), 400
 
     if pipeline_manager.active_job:
@@ -97,9 +112,26 @@ def api_generate():
         quantization=quantization,
         enhance_prompt=enhance_prompt,
         images=images,
+        tiling_spatial_tile=tiling_spatial_tile,
+        tiling_temporal_tile=tiling_temporal_tile,
     )
     pipeline_manager.submit_job(req)
     return jsonify({"job_id": job_id})
+
+
+# ── API: Estimate ────────────────────────────────────────────
+
+@app.route("/api/estimate", methods=["POST"])
+def api_estimate():
+    """Estimate VRAM usage and generation time for given parameters."""
+    data = request.get_json(force=True)
+    height = int(data.get("height", 1024))
+    width = int(data.get("width", 1536))
+    num_frames = int(data.get("num_frames", 121))
+    quantization = data.get("quantization", None)
+
+    result = pipeline_manager.estimate_generation(height, width, num_frames, quantization)
+    return jsonify(result)
 
 
 # ── API: SSE Status Stream ──────────────────────────────────
@@ -200,7 +232,7 @@ if __name__ == "__main__":
     os.makedirs(str(OUTPUT_DIR), exist_ok=True)
     os.makedirs(str(UPLOAD_DIR), exist_ok=True)
     print("\n" + "=" * 60)
-    print("  LTX-2.3 Video Studio")
+    print("  LTX-2.3 Video Studio  (Enhanced: 4K + 20s + Compile)")
     print("  http://localhost:5000")
     print("=" * 60 + "\n")
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
