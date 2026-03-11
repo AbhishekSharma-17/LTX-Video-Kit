@@ -342,7 +342,12 @@ class PipelineManager:
             })
             gen_start = time.time()
 
-            with torch.inference_mode():
+            # NOTE: Use torch.no_grad() instead of torch.inference_mode().
+            # The pipeline returns a lazy video iterator — the VAE decode
+            # runs inside encode_video() below.  inference_mode() creates
+            # special tensors that break when the VAE's conv3d layers try
+            # to save them for backward.  no_grad() avoids that.
+            with torch.no_grad():
                 video, audio = self._pipeline(
                     prompt=req.prompt,
                     seed=req.seed,
@@ -355,25 +360,27 @@ class PipelineManager:
                     enhance_prompt=req.enhance_prompt,
                 )
 
-            gen_time = time.time() - gen_start
+                gen_time = time.time() - gen_start
 
-            # ── Encode output ────────────────────────────────
-            self._emit(req.job_id, "stage", {
-                "stage": "encoding_video",
-                "message": "Encoding output video…",
-            })
+                # ── Encode output ────────────────────────────
+                # Must stay inside no_grad() because the video iterator
+                # triggers lazy VAE decoding when iterated.
+                self._emit(req.job_id, "stage", {
+                    "stage": "encoding_video",
+                    "message": "Encoding output video…",
+                })
 
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            output_filename = f"ltx23_{timestamp}_{req.job_id[:8]}.mp4"
-            output_path = str(OUTPUT_DIR / output_filename)
+                timestamp = time.strftime("%Y%m%d_%H%M%S")
+                output_filename = f"ltx23_{timestamp}_{req.job_id[:8]}.mp4"
+                output_path = str(OUTPUT_DIR / output_filename)
 
-            encode_video(
-                video=video,
-                fps=req.frame_rate,
-                audio=audio,
-                output_path=output_path,
-                video_chunks_number=video_chunks_number,
-            )
+                encode_video(
+                    video=video,
+                    fps=req.frame_rate,
+                    audio=audio,
+                    output_path=output_path,
+                    video_chunks_number=video_chunks_number,
+                )
 
             total_time = time.time() - overall_start
 
