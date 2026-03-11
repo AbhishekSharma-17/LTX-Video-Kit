@@ -1,0 +1,44 @@
+# ─────────────────────────────────────────────────────────────
+# LTX-Video-Kit — .gitignore
+# ─────────────────────────────────────────────────────────────
+
+# ── Model weights (67 GB — download via scripts/download_models.sh) ──
+models/
+
+# ── Python virtual environment (recreate via scripts/setup.sh) ──
+venv/
+
+# ── Generated / runtime files ──
+app/outputs/
+app/uploads/
+app/history.json
+sample_outputs/
+
+# ── Python bytecode ──
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# ── Egg / build artifacts ──
+*.egg-info/
+*.egg
+dist/
+build/
+*.so
+
+# ── IDE / editor files ──
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ── OS files ──
+Thumbs.db
+.Spotlight-V100
+.Trashes
+
+# ── HuggingFace cache ──
+.cache/

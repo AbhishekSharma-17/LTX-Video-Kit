@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LTX-2.3 Video Studio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            surface: { 50: '#18181b', 100: '#1f1f23', 200: '#27272a', 300: '#3f3f46' },
+            accent: { DEFAULT: '#6366f1', light: '#818cf8', dark: '#4f46e5' },
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="/static/css/custom.css">
+</head>
+<body class="bg-surface-50 text-gray-200 min-h-screen flex flex-col">
+
+  <!-- ════════ HEADER ════════ -->
+  <header class="bg-surface-100 border-b border-surface-300 px-6 py-3 flex items-center justify-between shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">L</div>
+      <h1 class="text-lg font-semibold text-white">LTX-2.3 <span class="text-indigo-400">Video Studio</span></h1>
+    </div>
+    <div class="flex items-center gap-4 text-sm">
+      <div id="gpu-info" class="text-gray-400"></div>
+      <div id="pipeline-badge" class="flex items-center gap-1.5">
+        <span class="relative flex h-2.5 w-2.5">
+          <span id="badge-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-gray-500"></span>
+          <span id="badge-dot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-gray-500"></span>
+        </span>
+        <span id="badge-text" class="text-gray-400">Pipeline idle</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ════════ MAIN LAYOUT ════════ -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- ──── LEFT PANEL ──── -->
+    <aside class="w-[380px] shrink-0 bg-surface-100 border-r border-surface-300 flex flex-col overflow-y-auto custom-scrollbar">
+      <div class="p-5 space-y-5">
+
+        <!-- Mode Tabs -->
+        <div class="flex bg-surface-50 rounded-lg p-1">
+          <button id="tab-t2v" onclick="setMode('t2v')"
+            class="flex-1 py-2 text-sm font-medium rounded-md transition-colors bg-surface-200 text-white">
+            Text → Video
+          </button>
+          <button id="tab-i2v" onclick="setMode('i2v')"
+            class="flex-1 py-2 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-white">
+            Image → Video
+          </button>
+        </div>
+
+        <!-- Prompt -->
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1.5">Prompt</label>
+          <textarea id="prompt" rows="4"
+            class="w-full bg-surface-50 border border-surface-300 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none resize-none"
+            placeholder="A golden retriever running through a sun-dappled meadow, cinematic lighting, slow motion…"></textarea>
+        </div>
+
+        <!-- Image Upload (hidden by default) -->
+        <div id="image-section" class="hidden">
+          <label class="block text-xs font-medium text-gray-400 mb-1.5">Reference Image</label>
+          <div id="drop-zone"
+            class="border-2 border-dashed border-surface-300 rounded-lg p-4 text-center cursor-pointer hover:border-indigo-500 transition-colors"
+            onclick="document.getElementById('image-input').click()">
+            <div id="drop-placeholder">
+              <svg class="mx-auto h-8 w-8 text-gray-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+              <p class="text-xs text-gray-500">Drop image or click to upload</p>
+            </div>
+            <img id="image-preview" class="hidden max-h-32 mx-auto rounded" />
+          </div>
+          <input id="image-input" type="file" accept="image/*" class="hidden" onchange="handleImageUpload(this)">
+          <button id="clear-image-btn" class="hidden mt-2 text-xs text-red-400 hover:text-red-300" onclick="clearImage()">
+            Remove image
+          </button>
+        </div>
+
+        <!-- Resolution -->
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1.5">Resolution</label>
+          <select id="resolution"
+            class="w-full bg-surface-50 border border-surface-300 rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-indigo-500">
+            <option value="512x768">512 × 768 (Fast)</option>
+            <option value="768x1280">768 × 1280 (Medium)</option>
+            <option value="1024x1536" selected>1024 × 1536 (Default)</option>
+          </select>
+        </div>
+
+        <!-- Frames -->
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1.5">Frames / Duration</label>
+          <select id="frames"
+            class="w-full bg-surface-50 border border-surface-300 rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-indigo-500">
+            <option value="25">25 frames (1.0s)</option>
+            <option value="49">49 frames (2.0s)</option>
+            <option value="73">73 frames (3.0s)</option>
+            <option value="97">97 frames (4.0s)</option>
+            <option value="121" selected>121 frames (5.0s)</option>
+          </select>
+        </div>
+
+        <!-- FPS + Seed row -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1.5">FPS</label>
+            <input id="fps" type="number" value="24" min="1" max="60"
+              class="w-full bg-surface-50 border border-surface-300 rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1.5">Seed</label>
+            <div class="flex gap-1">
+              <input id="seed" type="number" value="42" min="0"
+                class="flex-1 bg-surface-50 border border-surface-300 rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-indigo-500">
+              <button onclick="document.getElementById('seed').value=Math.floor(Math.random()*999999)"
+                class="px-2 bg-surface-50 border border-surface-300 rounded-lg text-gray-400 hover:text-white transition-colors" title="Random seed">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Toggles -->
+        <div class="space-y-3">
+          <label class="flex items-center justify-between cursor-pointer">
+            <span class="text-sm text-gray-300">FP8 Quantization</span>
+            <div class="relative">
+              <input id="fp8-toggle" type="checkbox" class="sr-only peer">
+              <div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-indigo-600 transition-colors"></div>
+              <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
+            </div>
+          </label>
+          <label class="flex items-center justify-between cursor-pointer">
+            <span class="text-sm text-gray-300">Enhance Prompt</span>
+            <div class="relative">
+              <input id="enhance-toggle" type="checkbox" class="sr-only peer">
+              <div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-indigo-600 transition-colors"></div>
+              <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
+            </div>
+          </label>
+        </div>
+
+        <!-- Generate Button -->
+        <button id="generate-btn" onclick="startGeneration()"
+          class="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+          <svg id="gen-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span id="gen-text">Generate Video</span>
+          <div id="gen-spinner" class="hidden spinner w-5 h-5"></div>
+        </button>
+
+      </div>
+    </aside>
+
+    <!-- ──── CENTER PANEL ──── -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+
+      <!-- Video Preview Area -->
+      <div class="flex-1 flex items-center justify-center p-6">
+        <div id="preview-container" class="w-full max-w-4xl">
+
+          <!-- Empty state -->
+          <div id="empty-state" class="text-center py-20">
+            <svg class="mx-auto h-20 w-20 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            <p class="text-gray-500 text-lg mb-1">No video yet</p>
+            <p class="text-gray-600 text-sm">Enter a prompt and click Generate to create your first video</p>
+          </div>
+
+          <!-- Progress area -->
+          <div id="progress-area" class="hidden space-y-4">
+            <div class="bg-surface-100 rounded-xl p-6 border border-surface-300">
+              <div class="flex items-center justify-between mb-3">
+                <span id="progress-stage" class="text-sm font-medium text-indigo-400">Initializing…</span>
+                <span id="progress-pct" class="text-sm text-gray-400">0%</span>
+              </div>
+              <div class="w-full bg-surface-50 rounded-full h-3 overflow-hidden">
+                <div id="progress-bar" class="progress-bar-animated h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+              </div>
+              <div class="flex justify-between mt-3 text-xs text-gray-500">
+                <span id="progress-step-info">—</span>
+                <span id="progress-eta">—</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Video player -->
+          <div id="video-area" class="hidden">
+            <div class="bg-surface-100 rounded-xl overflow-hidden border border-surface-300">
+              <video id="video-player" controls autoplay loop
+                class="w-full max-h-[60vh] bg-black">
+              </video>
+            </div>
+            <!-- Metrics bar -->
+            <div id="metrics-bar" class="mt-3 flex flex-wrap gap-3 justify-center text-xs">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ──── GALLERY ──── -->
+      <div id="gallery-section" class="bg-surface-100 border-t border-surface-300 shrink-0">
+        <div class="px-6 py-3 flex items-center justify-between">
+          <h2 class="text-sm font-medium text-gray-400">
+            Gallery
+            <span id="gallery-count" class="text-gray-500"></span>
+          </h2>
+          <button onclick="loadGallery()" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">Refresh</button>
+        </div>
+        <div id="gallery-grid" class="px-6 pb-4 flex gap-3 overflow-x-auto custom-scrollbar" style="min-height:120px">
+          <p id="gallery-empty" class="text-xs text-gray-600 m-auto">No videos generated yet</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ════════ JAVASCRIPT ════════ -->
+  <script>
+    // ── State ──
+    let currentMode = 't2v';
+    let uploadedImagePath = null;
+    let isGenerating = false;
+    let eventSource = null;
+
+    // ── Mode Switching ──
+    function setMode(mode) {
+      currentMode = mode;
+      const t2v = document.getElementById('tab-t2v');
+      const i2v = document.getElementById('tab-i2v');
+      const imgSec = document.getElementById('image-section');
+
+      if (mode === 't2v') {
+        t2v.className = 'flex-1 py-2 text-sm font-medium rounded-md transition-colors bg-surface-200 text-white';
+        i2v.className = 'flex-1 py-2 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-white';
+        imgSec.classList.add('hidden');
+      } else {
+        i2v.className = 'flex-1 py-2 text-sm font-medium rounded-md transition-colors bg-surface-200 text-white';
+        t2v.className = 'flex-1 py-2 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-white';
+        imgSec.classList.remove('hidden');
+      }
+    }
+
+    // ── Image Upload ──
+    async function handleImageUpload(input) {
+      const file = input.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        uploadedImagePath = data.path;
+
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const preview = document.getElementById('image-preview');
+          preview.src = e.target.result;
+          preview.classList.remove('hidden');
+          document.getElementById('drop-placeholder').classList.add('hidden');
+          document.getElementById('clear-image-btn').classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+      } catch (err) {
+        alert('Upload failed: ' + err.message);
+      }
+    }
+
+    function clearImage() {
+      uploadedImagePath = null;
+      document.getElementById('image-preview').classList.add('hidden');
+      document.getElementById('drop-placeholder').classList.remove('hidden');
+      document.getElementById('clear-image-btn').classList.add('hidden');
+      document.getElementById('image-input').value = '';
+    }
+
+    // Drag and drop
+    const dropZone = document.getElementById('drop-zone');
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-indigo-500'); });
+    dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('border-indigo-500'); });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-indigo-500');
+      const input = document.getElementById('image-input');
+      input.files = e.dataTransfer.files;
+      handleImageUpload(input);
+    });
+
+    // ── Generation ──
+    async function startGeneration() {
+      if (isGenerating) return;
+
+      const prompt = document.getElementById('prompt').value.trim();
+      if (!prompt) { alert('Please enter a prompt'); return; }
+
+      const [h, w] = document.getElementById('resolution').value.split('x').map(Number);
+      const numFrames = parseInt(document.getElementById('frames').value);
+      const fps = parseFloat(document.getElementById('fps').value);
+      const seed = parseInt(document.getElementById('seed').value);
+      const fp8 = document.getElementById('fp8-toggle').checked;
+      const enhance = document.getElementById('enhance-toggle').checked;
+
+      const images = [];
+      if (currentMode === 'i2v' && uploadedImagePath) {
+        images.push({ path: uploadedImagePath, frame_idx: 0, strength: 1.0, crf: 23 });
+      }
+
+      const body = {
+        prompt, height: h, width: w,
+        num_frames: numFrames, frame_rate: fps, seed,
+        quantization: fp8 ? 'fp8-cast' : null,
+        enhance_prompt: enhance,
+        images,
+      };
+
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (data.error) { alert(data.error); return; }
+
+        setGenerating(true);
+        listenForProgress(data.job_id);
+      } catch (err) {
+        alert('Failed to start generation: ' + err.message);
+      }
+    }
+
+    function setGenerating(active) {
+      isGenerating = active;
+      const btn = document.getElementById('generate-btn');
+      const icon = document.getElementById('gen-icon');
+      const text = document.getElementById('gen-text');
+      const spinner = document.getElementById('gen-spinner');
+
+      btn.disabled = active;
+      if (active) {
+        icon.classList.add('hidden');
+        spinner.classList.remove('hidden');
+        text.textContent = 'Generating…';
+        document.getElementById('empty-state').classList.add('hidden');
+        document.getElementById('video-area').classList.add('hidden');
+        document.getElementById('progress-area').classList.remove('hidden');
+      } else {
+        icon.classList.remove('hidden');
+        spinner.classList.add('hidden');
+        text.textContent = 'Generate Video';
+      }
+    }
+
+    // ── SSE Progress Listener ──
+    function listenForProgress(jobId) {
+      if (eventSource) eventSource.close();
+      eventSource = new EventSource(`/api/status/${jobId}`);
+
+      const stageWeights = {
+        loading:         { start: 0,  end: 5 },
+        loaded:          { start: 5,  end: 5 },
+        encoding_prompt: { start: 5,  end: 10 },
+        stage1:          { start: 10, end: 50 },
+        upsampling:      { start: 50, end: 55 },
+        stage2:          { start: 55, end: 85 },
+        encoding_video:  { start: 85, end: 95 },
+        decoding:        { start: 95, end: 100 },
+      };
+
+      eventSource.addEventListener('stage', (e) => {
+        const d = JSON.parse(e.data);
+        document.getElementById('progress-stage').textContent = d.message || d.stage;
+        const sw = stageWeights[d.stage];
+        if (sw) setProgress(sw.start);
+      });
+
+      eventSource.addEventListener('progress', (e) => {
+        const d = JSON.parse(e.data);
+        const sw = stageWeights[d.stage] || { start: 10, end: 85 };
+        const stageRange = sw.end - sw.start;
+        const pct = sw.start + (d.step / d.total_steps) * stageRange;
+        setProgress(pct);
+
+        document.getElementById('progress-step-info').textContent =
+          `Step ${d.step}/${d.total_steps} (${d.step_time}s/step)`;
+        if (d.eta > 0) {
+          document.getElementById('progress-eta').textContent =
+            `ETA: ${formatTime(d.eta)} | Elapsed: ${formatTime(d.elapsed)}`;
+        }
+      });
+
+      eventSource.addEventListener('complete', (e) => {
+        const d = JSON.parse(e.data);
+        setProgress(100);
+        setTimeout(() => {
+          showVideo(d);
+          setGenerating(false);
+          loadGallery();
+        }, 500);
+        eventSource.close();
+        eventSource = null;
+      });
+
+      eventSource.addEventListener('error', (e) => {
+        let msg = 'Generation failed';
+        try { msg = JSON.parse(e.data).message || msg; } catch {}
+        alert(msg);
+        setGenerating(false);
+        document.getElementById('progress-area').classList.add('hidden');
+        document.getElementById('empty-state').classList.remove('hidden');
+        if (eventSource) { eventSource.close(); eventSource = null; }
+      });
+    }
+
+    function setProgress(pct) {
+      pct = Math.min(100, Math.max(0, pct));
+      document.getElementById('progress-bar').style.width = pct + '%';
+      document.getElementById('progress-pct').textContent = Math.round(pct) + '%';
+    }
+
+    function formatTime(seconds) {
+      if (seconds < 60) return seconds.toFixed(1) + 's';
+      const m = Math.floor(seconds / 60);
+      const s = Math.round(seconds % 60);
+      return `${m}m ${s}s`;
+    }
+
+    // ── Video Display ──
+    function showVideo(data) {
+      document.getElementById('progress-area').classList.add('hidden');
+      document.getElementById('video-area').classList.remove('hidden');
+      const player = document.getElementById('video-player');
+      player.src = data.video_url;
+      player.load();
+
+      const metrics = document.getElementById('metrics-bar');
+      metrics.innerHTML = `
+        ${metricBadge('Resolution', `${data.width}×${data.height}`)}
+        ${metricBadge('Frames', `${data.num_frames} @ ${data.frame_rate}fps`)}
+        ${metricBadge('Duration', `${data.duration}s`)}
+        ${metricBadge('Seed', data.seed)}
+        ${metricBadge('Gen Time', `${data.gen_time}s`)}
+        ${metricBadge('Total Time', `${data.total_time}s`)}
+        ${metricBadge('Load Time', `${data.load_time}s`)}
+        ${metricBadge('File Size', `${data.file_size_mb} MB`)}
+        ${data.quantization ? metricBadge('Quantization', data.quantization) : ''}
+        ${data.enhance_prompt ? metricBadge('Enhanced', 'Yes') : ''}
+      `;
+    }
+
+    function metricBadge(label, value) {
+      return `<span class="bg-surface-200 border border-surface-300 rounded-md px-2.5 py-1">
+        <span class="text-gray-500">${label}:</span> <span class="text-gray-200">${value}</span>
+      </span>`;
+    }
+
+    // ── Gallery ──
+    async function loadGallery() {
+      try {
+        const res = await fetch('/api/gallery');
+        const data = await res.json();
+        const grid = document.getElementById('gallery-grid');
+        const emptyMsg = document.getElementById('gallery-empty');
+        const countEl = document.getElementById('gallery-count');
+
+        if (!data.length) {
+          grid.innerHTML = '<p class="text-xs text-gray-600 m-auto">No videos generated yet</p>';
+          countEl.textContent = '';
+          return;
+        }
+
+        countEl.textContent = `(${data.length})`;
+        grid.innerHTML = data.map(item => `
+          <div class="gallery-card shrink-0 w-52 bg-surface-50 rounded-lg overflow-hidden border border-surface-300 group">
+            <div class="relative cursor-pointer" onclick="playGalleryVideo('${item.video_url}', ${JSON.stringify(item).replace(/"/g, '&quot;')})">
+              <video class="w-full h-28 object-cover bg-black" src="${item.video_url}" muted preload="metadata"
+                onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0"></video>
+              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </div>
+            </div>
+            <div class="p-2.5">
+              <p class="text-xs text-gray-300 line-clamp-2 mb-1.5" title="${item.prompt}">${item.prompt}</p>
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-gray-500">${item.width}×${item.height} · ${item.gen_time}s</span>
+                <button onclick="event.stopPropagation();deleteGalleryItem('${item.job_id}')"
+                  class="text-gray-600 hover:text-red-400 transition-colors" title="Delete">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error('Failed to load gallery:', err);
+      }
+    }
+
+    function playGalleryVideo(url, data) {
+      document.getElementById('empty-state').classList.add('hidden');
+      document.getElementById('progress-area').classList.add('hidden');
+      showVideo(data);
+    }
+
+    async function deleteGalleryItem(jobId) {
+      if (!confirm('Delete this video?')) return;
+      try {
+        await fetch(`/api/gallery/${jobId}`, { method: 'DELETE' });
+        loadGallery();
+      } catch (err) {
+        alert('Delete failed');
+      }
+    }
+
+    // ── Pipeline Status Polling ──
+    async function pollPipelineStatus() {
+      try {
+        const res = await fetch('/api/pipeline/status');
+        const d = await res.json();
+        const dot = document.getElementById('badge-dot');
+        const ping = document.getElementById('badge-ping');
+        const text = document.getElementById('badge-text');
+        const gpuEl = document.getElementById('gpu-info');
+
+        if (d.active_job) {
+          dot.className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500';
+          ping.className = 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-indigo-500';
+          text.textContent = 'Generating…';
+          text.className = 'text-indigo-400';
+        } else if (d.loading) {
+          dot.className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-yellow-500';
+          ping.className = 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-yellow-500';
+          text.textContent = 'Loading models…';
+          text.className = 'text-yellow-400';
+        } else if (d.loaded) {
+          dot.className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500';
+          ping.className = 'hidden';
+          text.textContent = 'Pipeline ready';
+          text.className = 'text-green-400';
+        } else {
+          dot.className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-gray-500';
+          ping.className = 'hidden';
+          text.textContent = 'Pipeline idle';
+          text.className = 'text-gray-400';
+        }
+
+        if (d.gpu && d.gpu.gpu_name) {
+          gpuEl.textContent = `${d.gpu.gpu_name} · ${d.gpu.used_gb}/${d.gpu.total_gb} GB`;
+        }
+      } catch {}
+    }
+
+    // ── Init ──
+    loadGallery();
+    pollPipelineStatus();
+    setInterval(pollPipelineStatus, 5000);
+  </script>
+</body>
+</html>
